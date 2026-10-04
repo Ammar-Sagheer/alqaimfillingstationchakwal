@@ -13,7 +13,12 @@
 >   safe sheet and must never be copied here.
 > - `supabase/setup/al-qaim-forecourt.sql`: his tanks and nozzles, run once after
 >   the migrations (Unit 1 and 2 diesel, Unit 3 petrol, nozzles named 1 to 6).
+> - `supabase/setup/remove-placeholder-suppliers.sql`: 067's four placeholder
+>   suppliers deleted from his database (4 Oct 2026); he adds his real ones.
 > - The backup panel shows only when the Vercel env var `SHOW_BACKUP=true`.
+> - Deployed on Vercel as `alqaim-filling-station` (team "ammar's projects"),
+>   https://alqaim-filling-station.vercel.app, from `main`; Supabase project
+>   `mezfdpdvcchnlmylcruk`.
 >
 > The rest of this file, `README.md` and `docs/` describe the master app and its
 > history (including the first pump's), and hold for this one too.
