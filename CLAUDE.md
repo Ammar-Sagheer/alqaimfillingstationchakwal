@@ -5,9 +5,10 @@
 > are made there first and copied here, migrations keep the master's numbers,
 > and this repo's own differences are only:
 >
-> - `app/_lib/brand.js` (the name), `app/icon.png`, `app/apple-icon.png`,
->   `app/favicon.ico` (an AQ tile until his logo arrives; `public/logo.png` is
->   absent on purpose, so the initials show).
+> - `app/_lib/brand.js` (the name), `public/logo.png` (his mark, white
+>   background taken out, 360px wide), and `app/icon.png`, `app/apple-icon.png`,
+>   `app/favicon.ico` (made from the same mark by `scripts/build-icons.py --box
+>   0,0,.81,1`, which leaves out the two small dots: at 16px they are specks).
 > - `supabase/migrations/045_*` is empty: the master's 045 holds another pump's
 >   safe sheet and must never be copied here.
 > - `supabase/setup/al-qaim-forecourt.sql`: his tanks and nozzles, run once after
