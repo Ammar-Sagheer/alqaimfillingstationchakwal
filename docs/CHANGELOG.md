@@ -8096,6 +8096,32 @@ slip naming another customer's vehicle was refused and the right one reached
 the ledger; the internal functions are closed to `anon` and `authenticated`;
 and a backup round trip came back identical for all 24 tables.
 
+## Salaries on a phone, without scrolling for Pay
+
+Al Hakeem's owner, on his phone: "I need to scroll in order to click the pay button."
+The register came first (a screen and more for a few people), then three tall
+total cards, then a table that scrolled sideways with Pay at its far edge.
+Planned as a mock-up first and approved before any code changed.
+
+Below a 44rem container (a phone; a laptop is unchanged):
+
+- **An Attendance | Salaries switch** under the date, owner only (a staff
+  login has the register alone). Links, `?tab=salaries`, carried by the day
+  arrows and the month picker, so the choice survives moving about.
+- **The three total cards become one strip**: Earned, Paid, To pay. Side by
+  side from 22rem; stacked as rows below it, where three six-figure sums cut
+  off at 360px (the render check caught it).
+- **One card per person**: name, job and daily rate, the figure earned and
+  the days worked, and one full-width **"Pay Adnan Rs 5,131"** button, so the
+  tap is the decision. Paid, it becomes "Paid Rs 4,662, on 07 Oct 2026" with
+  a Cancel. The month picker moves under the list.
+
+`ConfirmAction` gains `triggerText` (a word instead of the icon); every
+existing caller is unchanged.
+
+Brought here from Al Hakeem on 6 Oct 2026. The hand-typed salaries warning
+(this repo's addition) sits under the section heading, so a phone sees it too.
+
 # Syncing the offline (Electron) build: reference `3d696ea` -> the end of migration 074
 
 **Who this is for.** A session working in `Ammar-Sagheer/Offline-Petrol-Pump-Manager`
@@ -8210,7 +8236,7 @@ desktop build changed the old file:
 | **Month-end stock** (068) | `MonthEndStock` on Dashboard and Reports | `getMonthEndStock` |
 | **Last dip per tank on Settings** | Settings | `getLastStockCheck` |
 | **Vehicles per customer** (073) | `VehiclePicker.js`, `customers/VehiclesPanel.js`; changes to `ReadingForm`, `LubricantSaleForm`, `LooseOilSaleForm`, `CustomerLedgerTable`, `StatementPreview`, `CustomerView`, `CustomersView`, `customer-statement.js` (`withVehicleNumbers`), `statement-pdf.js`, the customer page and statement route | `getCustomers` (now with `vehicles`), `getCustomerVehicles`, `getCustomerVehicleTotals`, `getFleetNumbers`; `addCustomerVehicle`, `removeCustomerVehicle`, `restoreCustomerVehicle`; the credit-line and oil-sale actions pass `vehicle_id` |
-| **Staff and salaries** (074) | `app/admin/salaries/`, `salaries/SalariesView.js`, `AttendanceRegister.js`, `StaffControls.js`; sidebar entries; `Icon.js` (`staff`, `attendance`, `salary`); `/admin/salaries` in `helpers.js` | `getStaffMembers`, `getAttendanceForDay`, `getSalaryMonth`, `getHandTypedSalaries`; `markAttendance`, `addStaffMember`, `setStaffRate`, `removeStaffMember`, `restoreStaffMember`, `paySalary`, `cancelSalaryPayment` |
+| **Staff and salaries** (074) | `app/admin/salaries/`, `salaries/SalariesView.js`, `AttendanceRegister.js`, `StaffControls.js`; sidebar entries; `Icon.js` (`staff`, `attendance`, `salary`); `/admin/salaries` in `helpers.js` | `getStaffMembers`, `getAttendanceForDay`, `getSalaryMonth`, `getHandTypedSalaries`; `markAttendance`, `addStaffMember`, `setStaffRate`, `removeStaffMember`, `restoreStaffMember`, `paySalary`, `cancelSalaryPayment`. The phone layout (Attendance / Salaries switch, `?tab=`, cards) is in the same view; `ConfirmAction` gains `triggerText` |
 
 **Online-only, do not port:**
 
@@ -8236,3 +8262,11 @@ desktop build changed the old file:
 7. Record the new sync point in the desktop build's `PROGRESS.md`, as a
    "fourth catch-up: reference `3d696ea` -> `<this repo's main commit>`".
 
+
+## AL QAIM: 073 and 074 applied to this pump's database
+
+Applied on 6 Oct 2026 to project `mezfdpdvcchnlmylcruk`, from the SQL editor,
+073 then 074 (recorded as `20261006000073` / `20261006000074`). Checked
+afterwards: all five new tables and ten app functions present, the three
+`vehicle_id` columns in, nothing missing from the backup, the forecourt as it
+was (2 tanks, 6 nozzles). The database had no customers or readings yet.
