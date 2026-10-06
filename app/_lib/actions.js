@@ -311,8 +311,12 @@ export async function saveReading(_prevState, formData) {
      * The sale itself keeps its paisa; the CASH side absorbs the difference,
      * which is where it belongs, cash being the residual and counted in notes.
      */
+    // The vehicle (073) is checked by the database: it must be on this
+    // customer's account and still in use.
+    const vehicleId = String(line?.vehicle_id ?? '').trim();
     cleanedLines.push({
       customer_id: customerId,
+      vehicle_id: /^[0-9a-f-]{36}$/i.test(vehicleId) ? vehicleId : null,
       litres: roundMoney(litres),
       amount: roundRupees(amount),
     });
@@ -1000,6 +1004,11 @@ export async function createLubricantSale(_prevState, formData) {
     credit_amount: credit,
     // A cash sale may still name the customer, but only a credit sale needs to.
     customer_id: customerId || null,
+    // And the vehicle (073), checked by the database against the customer.
+    vehicle_id:
+      customerId && /^[0-9a-f-]{36}$/i.test(text(formData, 'vehicle_id'))
+        ? text(formData, 'vehicle_id')
+        : null,
     note: note || null,
     created_by: profile.id,
   });
@@ -2197,6 +2206,90 @@ export async function updateTank(_prevState, formData) {
   return ok('Tank updated.');
 }
 
+// ---------------------------------------------------------------------------
+// A customer's vehicles (migration 073, built first for Al Hakeem)
+// ---------------------------------------------------------------------------
+
+function vehicleError(error, fallback) {
+  const message = error?.message ?? '';
+  if (message.includes('customer_vehicles_one_active_number')) {
+    return 'That vehicle number is already on an account. A number can be on one account at a time.';
+  }
+  return describe(error, fallback);
+}
+
+export async function addCustomerVehicle(_prevState, formData) {
+  let profile;
+  try {
+    // Staff add customers, so they add vehicles too; only the owner removes.
+    profile = await requireRole(ROLES.SUPER_ADMIN, ROLES.DATA_ENTRY);
+  } catch (error) {
+    return fail(error.message);
+  }
+
+  const customerId = text(formData, 'customer_id');
+  const number = text(formData, 'vehicle_number').replace(/\s+/g, ' ');
+  if (!customerId) return fail('Missing the customer.');
+  if (!number) return fail('Enter the vehicle number.');
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('customer_vehicles')
+    .insert({ customer_id: customerId, vehicle_number: number, created_by: profile.id });
+  if (error) return fail(vehicleError(error, 'Could not add the vehicle.'));
+
+  revalidatePath(`/admin/customers/${customerId}`);
+  revalidatePath('/admin/customers');
+  revalidatePath('/admin/readings');
+  revalidatePath('/admin/lubricants');
+  return ok(`${number} added.`);
+}
+
+export async function removeCustomerVehicle(_prevState, formData) {
+  try {
+    await requireRole(ROLES.SUPER_ADMIN);
+  } catch (error) {
+    return fail(error.message);
+  }
+  const vehicleId = text(formData, 'vehicle_id');
+  const customerId = text(formData, 'customer_id');
+  if (!vehicleId) return fail('Missing the vehicle.');
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('remove_customer_vehicle', { p_vehicle_id: vehicleId });
+  if (error) return fail(vehicleError(error, 'Could not remove the vehicle.'));
+
+  revalidatePath(`/admin/customers/${customerId}`);
+  revalidatePath('/admin/customers');
+  revalidatePath('/admin/readings');
+  revalidatePath('/admin/lubricants');
+  return ok(
+    data === 'retired'
+      ? 'Removed. Its old slips stay on the ledger; it takes no new ones.'
+      : 'Removed.',
+  );
+}
+
+export async function restoreCustomerVehicle(_prevState, formData) {
+  try {
+    await requireRole(ROLES.SUPER_ADMIN);
+  } catch (error) {
+    return fail(error.message);
+  }
+  const vehicleId = text(formData, 'vehicle_id');
+  const customerId = text(formData, 'customer_id');
+  if (!vehicleId) return fail('Missing the vehicle.');
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('restore_customer_vehicle', { p_vehicle_id: vehicleId });
+  if (error) return fail(vehicleError(error, 'Could not bring the vehicle back.'));
+
+  revalidatePath(`/admin/customers/${customerId}`);
+  revalidatePath('/admin/readings');
+  revalidatePath('/admin/lubricants');
+  return ok('Back on the account.');
+}
+
 export async function createExpense(_prevState, formData) {
   let profile;
   try {
@@ -2255,6 +2348,202 @@ export async function deleteExpense(_prevState, formData) {
   revalidatePath('/admin/expenses');
   revalidatePath('/admin/reports');
   return ok('Expense deleted.');
+}
+
+// ---------------------------------------------------------------------------
+// Staff and salaries (074, built first for Al Hakeem)
+//
+// The people the pump pays by the day, not the logins below. Attendance is
+// marked by either role; the people, their rates and their pay are the
+// owner's. Every rule (a paid month is closed, no future days, one active
+// name) is the database's; these only pass the form on and word the refusal.
+// ---------------------------------------------------------------------------
+
+const ATTENDANCE = ['present', 'half', 'absent'];
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+function revalidateSalaries() {
+  revalidatePath('/admin/salaries');
+  revalidatePath('/admin/expenses');
+  revalidatePath('/admin/reports');
+  revalidatePath('/admin');
+}
+
+function staffError(error, fallback) {
+  const message = error?.message ?? '';
+  if (message.includes('staff_members_one_active_name')) {
+    return 'Someone with that name is already on the staff list.';
+  }
+  return describe(error, fallback);
+}
+
+export async function markAttendance(_prevState, formData) {
+  let profile;
+  try {
+    profile = await requireRole(ROLES.SUPER_ADMIN, ROLES.DATA_ENTRY);
+  } catch (error) {
+    return fail(error.message);
+  }
+
+  const date = text(formData, 'work_date');
+  const status = text(formData, 'status');
+  const ids = formData.getAll('staff_id').filter((id) => typeof id === 'string' && id);
+  if (!ISO_DATE.test(date)) return fail('Missing the date.');
+  if (ids.length === 0) return fail('Missing the person.');
+  if (status !== 'clear' && !ATTENDANCE.includes(status)) return fail('Pick present, half day or absent.');
+
+  const supabase = await createClient();
+  const { error } =
+    status === 'clear'
+      ? await supabase.from('staff_attendance').delete().eq('work_date', date).in('staff_id', ids)
+      : await supabase.from('staff_attendance').upsert(
+          ids.map((id) => ({ staff_id: id, work_date: date, status, created_by: profile.id })),
+          { onConflict: 'staff_id,work_date' },
+        );
+  if (error) return fail(staffError(error, 'Could not save the attendance.'));
+
+  revalidatePath('/admin/salaries');
+  return ok(ids.length > 1 ? `${ids.length} people marked.` : 'Saved.');
+}
+
+export async function addStaffMember(_prevState, formData) {
+  try {
+    await requireRole(ROLES.SUPER_ADMIN);
+  } catch (error) {
+    return fail(error.message);
+  }
+
+  const name = text(formData, 'name').replace(/\s+/g, ' ');
+  const rate = number(formData, 'daily_rate');
+  const from = text(formData, 'effective_from');
+  if (!name) return fail('Enter the name.');
+  if (rate === null || rate <= 0) return fail('Enter a daily rate above zero.');
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('add_staff_member', {
+    p_name: name,
+    p_job: text(formData, 'job') || null,
+    p_phone: text(formData, 'phone') || null,
+    p_daily_rate: rate,
+    p_from: ISO_DATE.test(from) ? from : null,
+  });
+  if (error) return fail(staffError(error, 'Could not add them.'));
+
+  revalidatePath('/admin/salaries');
+  return ok(`${name} added to the staff list.`);
+}
+
+export async function setStaffRate(_prevState, formData) {
+  try {
+    await requireRole(ROLES.SUPER_ADMIN);
+  } catch (error) {
+    return fail(error.message);
+  }
+
+  const staffId = text(formData, 'staff_id');
+  const rate = number(formData, 'daily_rate');
+  const from = text(formData, 'effective_from');
+  if (!staffId) return fail('Missing the person.');
+  if (rate === null || rate <= 0) return fail('Enter a daily rate above zero.');
+  if (!ISO_DATE.test(from)) return fail('Enter the date the new rate starts.');
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('set_staff_rate', {
+    p_staff_id: staffId,
+    p_daily_rate: rate,
+    p_from: from,
+  });
+  if (error) return fail(staffError(error, 'Could not change the rate.'));
+
+  revalidatePath('/admin/salaries');
+  return ok(`New daily rate of ${formatPKR(rate)} from ${formatDate(from)}.`);
+}
+
+export async function removeStaffMember(_prevState, formData) {
+  try {
+    await requireRole(ROLES.SUPER_ADMIN);
+  } catch (error) {
+    return fail(error.message);
+  }
+
+  const staffId = text(formData, 'staff_id');
+  if (!staffId) return fail('Missing the person.');
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('remove_staff_member', { p_staff_id: staffId });
+  if (error) return fail(staffError(error, 'Could not remove them.'));
+
+  revalidatePath('/admin/salaries');
+  return ok(
+    data === 'deleted'
+      ? 'Removed. They had no attendance, so nothing else changed.'
+      : 'Removed from the list. Their attendance and pay stay on record.',
+  );
+}
+
+export async function restoreStaffMember(_prevState, formData) {
+  try {
+    await requireRole(ROLES.SUPER_ADMIN);
+  } catch (error) {
+    return fail(error.message);
+  }
+
+  const staffId = text(formData, 'staff_id');
+  if (!staffId) return fail('Missing the person.');
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('restore_staff_member', { p_staff_id: staffId });
+  if (error) return fail(staffError(error, 'Could not bring them back.'));
+
+  revalidatePath('/admin/salaries');
+  return ok('Back on the staff list.');
+}
+
+export async function paySalary(_prevState, formData) {
+  try {
+    await requireRole(ROLES.SUPER_ADMIN);
+  } catch (error) {
+    return fail(error.message);
+  }
+
+  const staffId = text(formData, 'staff_id');
+  const month = text(formData, 'salary_month');
+  const paidOn = text(formData, 'paid_on');
+  const amount = number(formData, 'amount');
+  if (!staffId || !ISO_DATE.test(month)) return fail('Missing the person or the month.');
+  if (!ISO_DATE.test(paidOn)) return fail('Enter the date it was paid.');
+  if (amount === null || amount <= 0) return fail('Enter the amount paid, above zero.');
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('pay_salary', {
+    p_staff_id: staffId,
+    p_month: month,
+    p_paid_on: paidOn,
+    p_amount: amount,
+    p_note: text(formData, 'note') || null,
+  });
+  if (error) return fail(staffError(error, 'Could not record the salary.'));
+
+  revalidateSalaries();
+  return ok(`Salary of ${formatPKR(amount)} recorded, and added to Expenses.`);
+}
+
+export async function cancelSalaryPayment(_prevState, formData) {
+  try {
+    await requireRole(ROLES.SUPER_ADMIN);
+  } catch (error) {
+    return fail(error.message);
+  }
+
+  const paymentId = text(formData, 'payment_id');
+  if (!paymentId) return fail('Missing the payment.');
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('cancel_salary_payment', { p_payment_id: paymentId });
+  if (error) return fail(staffError(error, 'Could not cancel the payment.'));
+
+  revalidateSalaries();
+  return ok('Payment cancelled, and taken out of Expenses.');
 }
 
 // ---------------------------------------------------------------------------

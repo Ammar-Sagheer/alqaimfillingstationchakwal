@@ -103,7 +103,7 @@ rather than working around it in the script.
 - **A column added to a table the backup covers must be nullable.** The restore
   writes every column by name, so a backup from before the column existed
   hands it null, and NOT NULL would refuse the whole file. Every column added
-  since 051 (056, 063, 065, 067) is nullable for this reason.
+  since 051 (056, 063, 065, 067, 073) is nullable for this reason.
 - **A naive reload is wrong twice over**, which is why the loading lives in
   Postgres: a credit slip auto-posts its own ledger entry (reload both and
   every balance doubles), and a freshly migrated project is not empty

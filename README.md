@@ -400,6 +400,16 @@ amount of application code can get around them.
   Supabase grants every new function to `anon` and `authenticated` by name, so
   `revoke ... from public` alone is not enough: revoke from all three.
 
+- **A credit slip's vehicle belongs to its customer** (073). A slip or an oil
+  sale may name one of the customer's vehicles, and only one that is on that
+  account and not removed; a vehicle number is on one account at a time. The
+  account still has one balance and one credit limit.
+
+- **A paid salary month is closed** (074). Once a person is paid for a month,
+  that month's attendance cannot be changed and no daily rate can be added
+  that would reprice one of its days, until the payment is cancelled (which
+  also removes its expense). Pay is worked out here, never in the browser.
+
 If the app and the database ever disagree, the database is right.
 
 ---
@@ -737,7 +747,7 @@ is the one migration that is not purely declarative:
   a Rs 1.46m loss in a month that made Rs 566,307 — and looks entirely
   reasonable while doing it. See "How profit is worked out" above.
 
-**The database is not a passive store.** Seventy-two migrations of triggers,
+**The database is not a passive store.** Seventy-four migrations of triggers,
 check constraints and RPCs hold the rules that make the books trustworthy —
 balanced days, an append-only ledger, no two readings covering the same
 litres, stock recalculated from history rather than incremented, no account
@@ -965,6 +975,8 @@ Applied in order:
 | `070_bank_keeps_every_entry.sql` | **Banking keeps every entry.** Drops 018's 60-per-account trim trigger; the amounts it already removed stay in `pruned_*`, so no balance moves. The Banking page pages in Postgres |
 | `071_opening_balance_entry_type.sql` | **A customer's opening balance saves again.** 034's `create_customer_with_opening()` wrote the entry type as text into the `ledger_entry_type` enum, so every opening amount was refused (and, one transaction, the customer with it). One cast; nothing else changes and no row is touched |
 | `072_close_internal_functions.sql` | **Internal functions closed to outside callers.** `cost_of_goods_sold`, `stock_value_at` and `lubricant_stock_value` answered the public (anon) key; seven helpers answered any staff login. 049's `revoke ... from public` missed Supabase's own grants to `anon`/`authenticated`. Every caller is a definer function, so nothing in the app changes. No row touched |
+| `073_customer_vehicles.sql` | **One account, many vehicles** (built first for Al Hakeem as its 801). `customer_vehicles` (a number is active on one account at a time, matched without case, spaces or dashes by `vehicle_key()`), and a nullable `vehicle_id` on credit slips, oil sales and the ledger entries they post. A trigger refuses a vehicle that is not on the slip's account or has been removed. `get_customer_vehicle_totals()` sums what each vehicle took, in Postgres. `remove_customer_vehicle()` deletes an unused vehicle and retires a used one; `restore_customer_vehicle()` brings it back. Each customer's old vehicle box joins the list (backfilled). One credit limit and one balance per account, no drivers. In the backup and the activity log; internal functions closed as 072 requires. No existing row changes (rehearsed: every table hashed before and after) |
+| `074_staff_salaries.sql` | **Staff attendance and salaries** (built first for Al Hakeem as its 802). The people the pump pays by the day (not logins): `staff_members`, a dated daily rate in `staff_rates` (a raise is a new row from a date), a register in `staff_attendance` (present, half day, absent; no future days), and `salary_payments`. `pay_salary()` sums the month in Postgres in whole rupees and writes one Salaries expense dated in the month worked, with the payment row; deleting that expense, or `cancel_salary_payment()`, undoes it. A paid month is closed: its attendance cannot change and no rate can reprice it. Rates and pay are the owner's under RLS; staff mark attendance. In the backup, the reset and the activity log |
 
 All reporting is done as Postgres aggregate RPCs rather than in the browser, so
 the numbers are fast and cannot be altered client-side.

@@ -480,9 +480,63 @@ export async function getExpectedStockForAllTanks(date) {
 
 export async function getCustomers() {
   const supabase = await createClient();
-  return unwrap(
-    await supabase.from('customers').select('*').eq('is_active', true).order('name'),
+  const rows = unwrap(
+    await supabase
+      .from('customers')
+      // Each with their vehicles (073): the credit forms offer them under the
+      // customer, and the Readings slip finds an account from a vehicle number.
+      .select('*, vehicles:customer_vehicles(id, vehicle_number, is_active)')
+      .eq('is_active', true)
+      .order('name'),
     'the customers',
+  );
+  return rows.map((customer) => ({
+    ...customer,
+    vehicles: (customer.vehicles ?? [])
+      .filter((vehicle) => vehicle.is_active)
+      .sort((a, b) => a.vehicle_number.localeCompare(b.vehicle_number, 'en', { numeric: true })),
+  }));
+}
+
+/** One customer's vehicles (073), retired ones too: the customer page lists both. */
+export async function getCustomerVehicles(customerId) {
+  const supabase = await createClient();
+  const rows = unwrap(
+    await supabase
+      .from('customer_vehicles')
+      .select('id, vehicle_number, is_active, created_at')
+      .eq('customer_id', customerId),
+    'the vehicles',
+  );
+  return rows.sort(
+    (a, b) =>
+      Number(b.is_active) - Number(a.is_active) ||
+      a.vehicle_number.localeCompare(b.vehicle_number, 'en', { numeric: true }),
+  );
+}
+
+/**
+ * Every active vehicle number, by customer (073), for the Customers list: a
+ * fleet reads "5 vehicles" under its name, and the search finds an account by
+ * any of its numbers, not only the one in the old vehicle box.
+ */
+export async function getFleetNumbers() {
+  const supabase = await createClient();
+  const rows = unwrap(
+    await supabase.from('customer_vehicles').select('customer_id, vehicle_number').eq('is_active', true),
+    'the vehicle numbers',
+  );
+  const byCustomer = {};
+  for (const row of rows) (byCustomer[row.customer_id] ??= []).push(row.vehicle_number);
+  return byCustomer;
+}
+
+/** What each vehicle on an account has taken on credit (073), all time. */
+export async function getCustomerVehicleTotals(customerId) {
+  const supabase = await createClient();
+  return unwrap(
+    await supabase.rpc('get_customer_vehicle_totals', { p_customer_id: customerId }),
+    'what each vehicle took',
   );
 }
 
@@ -1030,4 +1084,69 @@ export async function getTreasuryDay(date = null) {
   }
 
   return data;
+}
+
+// ---------------------------------------------------------------------------
+// Staff and salaries (074, built first for Al Hakeem)
+// ---------------------------------------------------------------------------
+
+/**
+ * Everyone on the staff list, active first, with their daily rates for the
+ * owner (staff_rates is the owner's under RLS, so a staff login gets none and
+ * `rates` comes back empty). Retired people are included only when asked for.
+ */
+export async function getStaffMembers({ includeRetired = false } = {}) {
+  const supabase = await createClient();
+  let query = supabase
+    .from('staff_members')
+    .select('id, name, job, phone, is_active, rates:staff_rates(daily_rate, effective_from)');
+  if (!includeRetired) query = query.eq('is_active', true);
+  const rows = unwrap(await query, 'the staff list');
+  return rows
+    .map((row) => ({
+      ...row,
+      rates: [...(row.rates ?? [])].sort((a, b) => (a.effective_from < b.effective_from ? 1 : -1)),
+    }))
+    .sort(
+      (a, b) => Number(b.is_active) - Number(a.is_active) || a.name.localeCompare(b.name, 'en'),
+    );
+}
+
+/** The register for one day: { staff_id: 'present' | 'half' | 'absent' }. */
+export async function getAttendanceForDay(date) {
+  const supabase = await createClient();
+  const rows = unwrap(
+    await supabase.from('staff_attendance').select('staff_id, status').eq('work_date', date),
+    'the attendance',
+  );
+  return Object.fromEntries(rows.map((row) => [row.staff_id, row.status]));
+}
+
+/** The Salaries table for the month holding `monthStart` (YYYY-MM-01), summed in Postgres. */
+export async function getSalaryMonth(monthStart) {
+  const supabase = await createClient();
+  return unwrap(await supabase.rpc('get_salary_month', { p_month: monthStart }), 'the salaries');
+}
+
+/**
+ * Salaries typed into Expenses by hand in a month, rather than paid from the
+ * Salaries page (074). Before 074 that was the only way, so a pump that moves
+ * to the page mid-way has both; the page warns, or a person paid both ways
+ * comes off the profit twice. Owner only (expenses are).
+ */
+export async function getHandTypedSalaries(from, to) {
+  const supabase = await createClient();
+  const [expenses, payments] = await Promise.all([
+    supabase
+      .from('expenses')
+      .select('id, amount')
+      .ilike('category', 'salar%')
+      .gte('expense_date', from)
+      .lte('expense_date', to),
+    supabase.from('salary_payments').select('expense_id'),
+  ]);
+  const paidHere = new Set(unwrap(payments, 'the salary payments').map((row) => row.expense_id));
+  return unwrap(expenses, 'the salary expenses').filter(
+    (row) => !paidHere.has(row.id) && Number(row.amount) > 0,
+  );
 }

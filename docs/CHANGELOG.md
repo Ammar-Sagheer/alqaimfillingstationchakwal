@@ -19,7 +19,7 @@ theme order; the last block of work is at the bottom.
 
 **The shape of it.** Next.js App Router (plain JavaScript) on Vercel in
 `sin1`, Supabase Postgres in `ap-southeast-1`. One owner, a couple of staff
-logins, one pump. Migrations run to **072**, and every page wears the new look
+logins, one pump. Migrations run to **074**, and every page wears the new look
 (September 2026).
 
 **What was added most recently**, newest last, all of it detailed further down:
@@ -70,6 +70,8 @@ logins, one pump. Migrations run to **072**, and every page wears the new look
 | Banking          | **Every bank entry is kept.** The 60-per-account cap (018) is removed; it was deleting HBL 2303's entries after about two and a half weeks. The page now pages in Postgres. Migration 070. |
 | Customers        | **A new customer's opening balance saves.** It never had: 034 wrote the entry type as text into an enum column, so every opening amount was refused. Migration 071. |
 | Security         | **Stock value and cost of sales were readable without logging in**, through three functions the public key could call. Closed, with seven internal helpers staff could call. Migration 072. |
+| Customers        | **A customer can run a fleet** (073): vehicles under one account, the vehicle on each credit slip and oil sale, what each vehicle took on the customer's page, the vehicle on the statement, and search by any number. Built first for Al Hakeem. |
+| Salaries         | **Staff attendance and salaries** (074): a daily register, a dated daily rate per person, and month-end pay recorded as Salaries expenses in the month worked; a warning when the month already has salaries typed into Expenses by hand. Built first for Al Hakeem. |
 
 **If you are porting this to Electron or another shell**, read
 `README.md` → "If you are porting this off Supabase" first. The short version:
@@ -7993,7 +7995,108 @@ purpose, as the owner the September report, month export, range and daily
 summaries all ran (September profit Rs 499,689.86, as recorded under 069), and
 as `anon` `cost_of_goods_sold` was refused.
 
-# Syncing the offline (Electron) build: reference `3d696ea` -> the end of migration 072
+## One account, many vehicles (migration 073)
+
+Built first for Al Hakeem Filling Station (its 801) and brought here on 6 Oct
+2026. What follows is its story there; here it is the same feature under the
+number 073, with its internal functions closed as 072 requires.
+
+Some of this owner's customers are transport companies with 10 to 15 vehicles
+and one khata. He wanted to keep the one account and still know which vehicle
+took what. Asked, he chose **one credit limit per customer, no drivers, and
+the fill recorded against the vehicle**.
+
+- **The customer's page** has a Vehicles section above the history: a box to
+  add a number, and a table of each vehicle with its slips, litres, fuel
+  rupees and oil rupees, all time, summed in Postgres
+  (`get_customer_vehicle_totals`). Slips that named no vehicle get a row of
+  their own, so the column adds up to the account. The owner removes a
+  vehicle (deleted if it never took a slip, otherwise retired and kept on the
+  old slips) and can bring it back.
+- **The slip line** on a reading gains a "Vehicle no." box: type the number on
+  the windscreen and the customer and vehicle are both chosen, because the
+  driver knows his truck and not always whose account it is on. Under the
+  customer, a vehicle choice: absent for a customer with none, filled in for
+  one with one, and required for a fleet, so a fleet slip is never filed
+  against nobody by accident ("Not one of these" is always there for a truck
+  not yet on the list). The two oil forms carry the same choice.
+- **The ledger, the statement preview and the PDF** name the vehicle on each
+  row (a violet badge on screen, "Vehicle LES-4471" on the PDF's second line).
+  The Customers list says "5 vehicles" under a fleet's name and its search
+  finds an account by any of its numbers, typed with or without the dash.
+- **The rules are the database's**: a slip's vehicle must be on the slip's
+  account and active (`trg_vehicle_belongs_to_customer`), a number is on one
+  account at a time, and `vehicle_id` is copied from the slip to the ledger
+  entry it posts. The customer's old single vehicle box joins the list, by
+  trigger and by a backfill, so nothing typed before is lost.
+
+Every new column is nullable (backups from before 801 restore), the table is in
+`backup_table_order()` after `customers`, and adding or removing a vehicle is
+in the activity log. Tested on a local Postgres with a fleet of five, slips on
+three of them, oil on credit, a removed vehicle refused on a new slip, staff
+refused on remove, and a retire and restore. Rendered at 1366 and 400 px.
+
+## Staff attendance and salaries (migration 074)
+
+Built first for Al Hakeem Filling Station (its 802) and brought here on 6 Oct
+2026, with one addition for a pump already trading: **a warning when the month
+already has salaries typed into Expenses by hand** (`getHandTypedSalaries`).
+Before 074 that was the only way to record them, so a pump that starts using
+the page mid-way would otherwise pay the same person twice in the profit.
+The rest is its story at Al Hakeem.
+
+Al Hakeem's owner asked for a page to keep each staff member's daily attendance
+against a daily rate he sets, to add and remove staff, and to pay salaries
+at the end of the month as an expense that comes off his profit. Before
+this, salaries were typed into Expenses by hand as free text ("salary of
+haseeb and pump tea"), with nothing to check them against.
+
+**Salaries** in the sidebar (**Attendance** for a staff login; same page,
+pay hidden). In the order it is used:
+
+- **Attendance** for the day in the header (`DayHeader`, so the arrows and
+  the jump box work as on Readings): every active person with Present / Half
+  day / Absent. A tap saves at once and the row says "Saving…"; a refusal puts
+  the row back and says why. "Mark the rest present" does the usual case in
+  one tap. The chosen choice is filled in its own colour (green, amber, red)
+  with the word on it.
+- **Salaries, <month>** (owner): Earned / Paid / Still to pay, then a table of
+  each person's daily rate, days worked (full, half, absent, and "not marked"
+  in amber) and earned, with Pay beside it. Pay opens with the register's
+  figure, which can be changed for an advance taken off or a bonus, with a
+  note. For the first fortnight of a month the page warns if anyone in the
+  month before is unpaid, with a link to it.
+- **Staff list** (owner): add (name, job, phone, daily rate, started on),
+  change rate (from a date), remove, bring back.
+
+**Rules in the database**: rates are dated, like fuel prices, so a raise does
+not reprice the past; earned is summed in Postgres in whole rupees
+(`staff_month_earned`); a payment writes the expense itself, dated in the
+month WORKED, so September's wages paid on 2 October still come off
+September's profit; a paid month is closed (attendance and rates refuse in
+words) until the payment is cancelled; no attendance for a day not yet
+come; one active person per name. Rates and pay are the owner's under RLS.
+
+Two layout findings: four day-count columns (Present, Half, Absent, Not
+marked) pushed the Pay button off the card below 1366px, so they became one
+"Days worked" column with the split under the total; and Earned and the
+pay action share a cell, so the action never scrolls away from its figure.
+Tested on a local Postgres: earned across a mid-month raise (Rs 22,400
+against a hand sum), every refusal, staff role limits, cancel reopening the
+month, reset, and a backup round trip that came back identical. Rendered at
+1366, 1024, 800, 400 and 320 px.
+
+**Rehearsed for this repo** (6 Oct 2026) on a local Postgres built from 001 to
+072 with Supabase's default grants, filled with six weeks of trading (252
+readings, 10 customers with vehicle numbers, 99 credit slips, 16 oil sales on
+credit) plus two hand-typed salary expenses. 073 and 074 applied cleanly; every
+one of the 21 existing tables hashed identical before and after (leaving out
+the new, empty `vehicle_id` column); all 10 vehicle numbers joined the list; a
+slip naming another customer's vehicle was refused and the right one reached
+the ledger; the internal functions are closed to `anon` and `authenticated`;
+and a backup round trip came back identical for all 24 tables.
+
+# Syncing the offline (Electron) build: reference `3d696ea` -> the end of migration 074
 
 **Who this is for.** A session working in `Ammar-Sagheer/Offline-Petrol-Pump-Manager`
 (the desktop build: Electron, its own bundled Postgres, `pg` driver, `app_user`
@@ -8017,7 +8120,7 @@ pieces.
 this repo's 044, its 037 is this repo's 050). Compare by content, never by
 number. New desktop migrations continue from **038**.
 
-## 1. Database: 20 migrations, 3 to skip
+## 1. Database: 22 migrations, 3 to skip
 
 Two edits apply to every migration taken, as in the earlier catch-ups:
 `auth.uid()` becomes the desktop build's `current_uid()`, and grants `to
@@ -8045,6 +8148,8 @@ those lines).
 | 069 `stock_at_lower_of_cost_or_pump_price` | Stock at the lower of cost and the pump price | **Take, and check it bit.** Patches `tank_stock_value()` through `pg_get_functiondef()`, like 059 |
 | 070 `bank_keeps_every_entry` | Drops the 60-per-account bank trim trigger | **Take.** The desktop build still has the trigger (its 006, `trim_bank_transactions`) |
 | 071 `opening_balance_entry_type` | Fixes `create_customer_with_opening()`'s enum cast | **Skip.** The desktop build found and fixed this itself in its 023, before this repo did |
+| 073 `customer_vehicles` | `customer_vehicles`, a nullable `vehicle_id` on credit slips, oil sales and ledger entries, the vehicle trigger, per-vehicle totals, remove / restore | **Take, carefully.** It redefines `create_nozzle_reading()` and the two ledger-posting triggers whole: diff each against the desktop build's own copy first and carry only the `vehicle_id` lines if they differ. Its activity line patches `trg_write_activity()` by text, like 059. Drop the `backup_table_order()` part (the desktop build never took 051) and the 072-style revoke block, or revoke from `app_user` instead |
+| 074 `staff_salaries` | Staff, dated daily rates, attendance, salary payments into Expenses, a paid month closed | **Take.** New tables only. `auth.uid()` -> `current_uid()`, grants to `app_user`. It patches `reset_all_data()` and `trg_write_activity()` by text: check both bit. Drop the `backup_table_order()` part |
 | 072 `close_internal_functions` | Revokes outside access to ten internal functions | **Supabase-specific; adapt or skip.** The leak was Supabase's `anon` role. The desktop build has no `anon` and no network exposure; if wanted, the equivalent is revoking the same ten from `app_user` (the app never calls them directly; every caller is SECURITY DEFINER). Low priority |
 
 ## 2. The app: the new look, new pages, new shared files
@@ -8104,6 +8209,8 @@ desktop build changed the old file:
 | **Back-dated price re-prices** (066) | Readings, Settings | `getRatesInForce`; price save/remove now go through `set_fuel_price` / `remove_fuel_price` |
 | **Month-end stock** (068) | `MonthEndStock` on Dashboard and Reports | `getMonthEndStock` |
 | **Last dip per tank on Settings** | Settings | `getLastStockCheck` |
+| **Vehicles per customer** (073) | `VehiclePicker.js`, `customers/VehiclesPanel.js`; changes to `ReadingForm`, `LubricantSaleForm`, `LooseOilSaleForm`, `CustomerLedgerTable`, `StatementPreview`, `CustomerView`, `CustomersView`, `customer-statement.js` (`withVehicleNumbers`), `statement-pdf.js`, the customer page and statement route | `getCustomers` (now with `vehicles`), `getCustomerVehicles`, `getCustomerVehicleTotals`, `getFleetNumbers`; `addCustomerVehicle`, `removeCustomerVehicle`, `restoreCustomerVehicle`; the credit-line and oil-sale actions pass `vehicle_id` |
+| **Staff and salaries** (074) | `app/admin/salaries/`, `salaries/SalariesView.js`, `AttendanceRegister.js`, `StaffControls.js`; sidebar entries; `Icon.js` (`staff`, `attendance`, `salary`); `/admin/salaries` in `helpers.js` | `getStaffMembers`, `getAttendanceForDay`, `getSalaryMonth`, `getHandTypedSalaries`; `markAttendance`, `addStaffMember`, `setStaffRate`, `removeStaffMember`, `restoreStaffMember`, `paySalary`, `cancelSalaryPayment` |
 
 **Online-only, do not port:**
 
@@ -8124,6 +8231,8 @@ desktop build changed the old file:
 4. A new customer with an opening balance saves (the desktop build's 023 fix).
 5. Render every page at 1366, 1024 and 400 px wide, as both repos' `CLAUDE.md`
    require, and compare against the live site.
-6. Record the new sync point in the desktop build's `PROGRESS.md`, as a
+6. 073 and 074: a credit slip naming a vehicle reaches the ledger with it,
+   and paying a salary writes one Salaries expense in the month worked.
+7. Record the new sync point in the desktop build's `PROGRESS.md`, as a
    "fourth catch-up: reference `3d696ea` -> `<this repo's main commit>`".
 
