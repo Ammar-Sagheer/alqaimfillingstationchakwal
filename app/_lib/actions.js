@@ -2866,6 +2866,8 @@ export async function createBankTransaction(_prevState, formData) {
     if (paymentError) return fail(describe(paymentError, 'Could not record the payment.'));
 
     revalidatePath('/admin/banking');
+    // The Dashboard's Bank entry dialog shows the balances too (Al Hakeem).
+    revalidatePath('/admin');
     return ok(data?.message ?? 'Payment recorded.');
   }
 
@@ -2883,6 +2885,7 @@ export async function createBankTransaction(_prevState, formData) {
   if (error) return fail(describe(error, 'Could not record the deposit.'));
 
   revalidatePath('/admin/banking');
+  revalidatePath('/admin');
   return ok('Deposit recorded.');
 }
 

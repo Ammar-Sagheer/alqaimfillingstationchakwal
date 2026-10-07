@@ -8122,6 +8122,24 @@ existing caller is unchanged.
 Brought here from Al Hakeem on 6 Oct 2026. The hand-typed salaries warning
 (this repo's addition) sits under the section heading, so a phone sees it too.
 
+## Quick entry on the Dashboard (expenses and banking)
+
+Al Hakeem's owner asked to record expenses and bank entries from the Dashboard, so
+he does not have to visit Expenses and Banking as often. A "Quick entry"
+strip under the date: **Add expense** (the Expenses page's own dialog) and
+**Bank entry** (Banking's own deposit / withdrawal form, in a dialog), with
+links to both full pages. The same forms, so the same rules and the same
+refusals. With no bank account yet, the button says "Add a bank account" and
+goes to Banking.
+
+`BankTransactionForm` gains `bare` (no panel or heading inside a dialog) and
+`onSaved` (closes the dialog); Banking uses neither. A bank save now also
+refreshes the Dashboard, whose dialog shows the account balances. On a phone
+the two buttons are full width, one above the other: side by side they
+wrapped "Add expense" onto two lines.
+
+Brought here from Al Hakeem on 7 Oct 2026, unchanged.
+
 # Syncing the offline (Electron) build: reference `3d696ea` -> the end of migration 074
 
 **Who this is for.** A session working in `Ammar-Sagheer/Offline-Petrol-Pump-Manager`
@@ -8237,6 +8255,7 @@ desktop build changed the old file:
 | **Last dip per tank on Settings** | Settings | `getLastStockCheck` |
 | **Vehicles per customer** (073) | `VehiclePicker.js`, `customers/VehiclesPanel.js`; changes to `ReadingForm`, `LubricantSaleForm`, `LooseOilSaleForm`, `CustomerLedgerTable`, `StatementPreview`, `CustomerView`, `CustomersView`, `customer-statement.js` (`withVehicleNumbers`), `statement-pdf.js`, the customer page and statement route | `getCustomers` (now with `vehicles`), `getCustomerVehicles`, `getCustomerVehicleTotals`, `getFleetNumbers`; `addCustomerVehicle`, `removeCustomerVehicle`, `restoreCustomerVehicle`; the credit-line and oil-sale actions pass `vehicle_id` |
 | **Staff and salaries** (074) | `app/admin/salaries/`, `salaries/SalariesView.js`, `AttendanceRegister.js`, `StaffControls.js`; sidebar entries; `Icon.js` (`staff`, `attendance`, `salary`); `/admin/salaries` in `helpers.js` | `getStaffMembers`, `getAttendanceForDay`, `getSalaryMonth`, `getHandTypedSalaries`; `markAttendance`, `addStaffMember`, `setStaffRate`, `removeStaffMember`, `restoreStaffMember`, `paySalary`, `cancelSalaryPayment`. The phone layout (Attendance / Salaries switch, `?tab=`, cards) is in the same view; `ConfirmAction` gains `triggerText` |
+| **Quick entry on the Dashboard** | `dashboard/QuickEntry.js`, `DashboardView.js`, `app/admin/page.js`; `BankTransactionForm.js` gains `bare` and `onSaved` | `getBankAccounts` and `getExpenseCategories` on the Dashboard; `createBankTransaction` also revalidates `/admin` |
 
 **Online-only, do not port:**
 

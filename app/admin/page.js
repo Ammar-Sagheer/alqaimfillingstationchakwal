@@ -1,5 +1,6 @@
 import { requirePageRole, ROLES, todayISO, shiftISODate } from '@/app/_lib/helpers';
 import { getDailySummary, getSalesTrend, getLubricantTrend, getMonthEndStock } from '@/app/_lib/data-service';
+import { getBankAccounts, getExpenseCategories } from '@/app/_lib/data-service';
 import { trendDaysFrom } from '@/app/_components/admin/dashboard/TrendWindow';
 import DashboardView from '@/app/_components/admin/dashboard/DashboardView';
 
@@ -37,11 +38,14 @@ export default async function DashboardPage({ searchParams }) {
   const closedYear = month === 1 ? year - 1 : year;
   const closedMonth = month === 1 ? 12 : month - 1;
 
-  const [summary, trend, lubricantTrend, monthEndStock] = await Promise.all([
+  const [summary, trend, lubricantTrend, monthEndStock, bankAccounts, expenseCategories] = await Promise.all([
     getDailySummary(date),
     getSalesTrend(trendFrom, date),
     getLubricantTrend(trendFrom, date),
     getMonthEndStock(closedYear, closedMonth).catch((error) => ({ error: error.message })),
+    // For the Quick entry strip. Neither may take the page down.
+    getBankAccounts().catch(() => []),
+    getExpenseCategories().catch(() => []),
   ]);
 
   return (
@@ -53,6 +57,8 @@ export default async function DashboardPage({ searchParams }) {
       trend={trend}
       lubricantTrend={lubricantTrend}
       monthEndStock={monthEndStock}
+      bankAccounts={bankAccounts}
+      expenseCategories={expenseCategories}
     />
   );
 }
