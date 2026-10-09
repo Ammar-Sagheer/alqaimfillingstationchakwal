@@ -13,6 +13,8 @@
 >   safe sheet and must never be copied here.
 > - `supabase/setup/al-qaim-forecourt.sql`: his tanks and nozzles, run once after
 >   the migrations (Unit 1 and 2 diesel, Unit 3 petrol, nozzles named 1 to 6).
+> - `supabase/setup/al-qaim-dip-charts.sql`: his two tank charts (075), loaded
+>   9 Oct 2026; four slips in the printed diesel chart corrected (see the file).
 > - `supabase/setup/remove-placeholder-suppliers.sql`: 067's four placeholder
 >   suppliers deleted from his database (4 Oct 2026); he adds his real ones.
 > - The backup panel shows only when the Vercel env var `SHOW_BACKUP=true`.
@@ -103,7 +105,7 @@ rather than working around it in the script.
 - **A column added to a table the backup covers must be nullable.** The restore
   writes every column by name, so a backup from before the column existed
   hands it null, and NOT NULL would refuse the whole file. Every column added
-  since 051 (056, 063, 065, 067, 073) is nullable for this reason.
+  since 051 (056, 063, 065, 067, 073, 075) is nullable for this reason.
 - **A naive reload is wrong twice over**, which is why the loading lives in
   Postgres: a credit slip auto-posts its own ledger entry (reload both and
   every balance doubles), and a freshly migrated project is not empty

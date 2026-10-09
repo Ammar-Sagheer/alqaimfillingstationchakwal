@@ -29,6 +29,7 @@ export default function SettingsView({
   prices,
   rates,
   lastDips,
+  chartRanges = {},
   backupError,
   showBackup,
   showReset,
@@ -145,7 +146,12 @@ export default function SettingsView({
             line pinned to its bottom, so the "Last dipped" lines sit level. */}
         <div className="grid gap-5 @[40rem]:grid-cols-2">
           {tanks.map((tank, index) => (
-            <TankForm key={tank.id} tank={tank} lastDip={lastDips[index]} />
+            <TankForm
+              key={tank.id}
+              tank={tank}
+              lastDip={lastDips[index]}
+              chart={chartRanges[tank.id] ?? null}
+            />
           ))}
         </div>
       </section>

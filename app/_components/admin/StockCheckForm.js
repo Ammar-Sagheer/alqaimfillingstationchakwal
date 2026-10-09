@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useRef, useState } from 'react';
 
-import { createStockCheck, deleteStockCheck } from '@/app/_lib/actions';
+import { createStockCheck, deleteStockCheck, previewDipLitres } from '@/app/_lib/actions';
 import { shiftISODate, formatDate } from '@/app/_lib/date-helpers';
 import SubmitButton from '@/app/_components/ui/SubmitButton';
 import FormMessage from '@/app/_components/ui/FormMessage';
@@ -78,10 +78,22 @@ export default function StockCheckForm({
   earliestBooksDate = null,
   openingStock = null,
   canManage = false,
+  // { min_mm, max_mm, lines } when this tank has a dip chart (075), else null.
+  chart = null,
 }) {
   const [state, formAction] = useActionState(createStockCheck, null);
   const [clearState, clearAction] = useActionState(deleteStockCheck, null);
   const [dip, setDip] = useState('');
+  /*
+   * WITH A CHART, THE ROD READING IN MM. The litres it comes to are asked of
+   * the database as he types (previewDipLitres) and shown under the box; the
+   * database works them out again when the dip is saved, so what is shown is
+   * what is stored. "Enter litres instead" is there for a reading off another
+   * chart, or a chart that turns out to be wrong.
+   */
+  const [byMm, setByMm] = useState(Boolean(chart));
+  const [mm, setMm] = useState('');
+  const [chartLitres, setChartLitres] = useState({ litres: null, error: null, pending: false });
   const [taken, setTaken] = useState('morning');
   const [notice, setNotice] = useState(null);
   const formRef = useRef(null);
@@ -109,16 +121,46 @@ export default function StockCheckForm({
       setNotice({ message: state.message });
       formRef.current?.reset();
       setDip('');
+      setMm('');
+      setChartLitres({ litres: null, error: null, pending: false });
+      setByMm(Boolean(chart));
       setTaken('morning');
     }
+    // `chart` only decides the box to go back to.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
 
   // A different day is a different measurement. Belt to the effect's braces:
   // if a save is ever missed, the box still empties when the date changes.
   useEffect(() => {
     setDip('');
+    setMm('');
+    setChartLitres({ litres: null, error: null, pending: false });
     setTaken('morning');
   }, [date]);
+
+  // Ask the database what the rod reading comes to, a moment after typing stops.
+  useEffect(() => {
+    if (!byMm || mm === '') {
+      setChartLitres({ litres: null, error: null, pending: false });
+      return undefined;
+    }
+    setChartLitres((current) => ({ ...current, pending: true }));
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      const result = await previewDipLitres(tank.id, mm);
+      if (cancelled) return;
+      setChartLitres(
+        result?.ok
+          ? { litres: result.litres, error: null, pending: false }
+          : { litres: null, error: result?.message ?? 'Could not read the chart.', pending: false },
+      );
+    }, 350);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [byMm, mm, tank.id]);
 
   // Clearing a dip confirms the same way. ConfirmAction closes its own dialog
   // on success, so without this the only trace of it would be the row vanishing.
@@ -159,7 +201,7 @@ export default function StockCheckForm({
     ? !earliestBooksDate || (existingCheck.books_date ?? '') <= earliestBooksDate
     : !earliestBooksDate || closesDate <= earliestBooksDate;
 
-  const dipValue = dip === '' ? null : Number(dip);
+  const dipValue = byMm ? chartLitres.litres : dip === '' ? null : Number(dip);
   const hasDip = dipValue !== null && Number.isFinite(dipValue);
   const difference = hasDip ? round2(dipValue - expected) : null;
 
@@ -273,6 +315,11 @@ export default function StockCheckForm({
                   <p className="tabular whitespace-nowrap text-2xl font-bold text-ink-900">
                     {showLitres(existingCheck.actual_dip_reading)}
                   </p>
+                  {existingCheck.dip_mm !== null && existingCheck.dip_mm !== undefined ? (
+                    <p className="tabular text-sm font-semibold text-ink-800">
+                      Rod reading {litreFormat.format(Number(existingCheck.dip_mm))} mm, from the chart
+                    </p>
+                  ) : null}
                   <p className="text-sm text-ink-700">
                     Taken {existingCheck.taken ?? 'morning'} of {formatDate(date)}
                   </p>
@@ -336,6 +383,57 @@ export default function StockCheckForm({
                 </p>
               </div>
 
+              {byMm ? (
+              <div>
+                {/* Same rule as the litres box: the tank is named in the label. */}
+                <label className="label" htmlFor={`dipmm-${tank.id}`}>
+                  <span className={`font-bold ${color.onWhite}`}>{tank.name}</span> rod reading{' '}
+                  <span className="font-semibold text-ink-900">in mm</span>
+                </label>
+                <NumberInput
+                  id={`dipmm-${tank.id}`}
+                  name="dip_mm"
+                  step="0.1"
+                  min="0"
+                  max={chart?.max_mm}
+                  required
+                  value={mm}
+                  onChange={(event) => setMm(event.target.value)}
+                  className="input-number"
+                  placeholder="0"
+                  aria-describedby={`dipmm-help-${tank.id}`}
+                />
+                {mm !== '' ? (
+                  <div className="figure-box mt-2" aria-live="polite">
+                    <p className="caption">From the tank chart</p>
+                    {chartLitres.error ? (
+                      <p className="text-sm font-semibold text-red-700">{chartLitres.error}</p>
+                    ) : chartLitres.pending || chartLitres.litres === null ? (
+                      <p className="text-sm text-ink-700">Reading the chart…</p>
+                    ) : (
+                      <p className="tabular whitespace-nowrap text-2xl font-bold text-ink-900">
+                        = {showLitres(chartLitres.litres)}
+                      </p>
+                    )}
+                  </div>
+                ) : null}
+                <p id={`dipmm-help-${tank.id}`} className="mt-1.5 text-sm text-ink-700">
+                  Type the depth the rod shows. The litres come from this tank&apos;s chart,{' '}
+                  <span className="tabular whitespace-nowrap">
+                    {litreFormat.format(Number(chart?.min_mm ?? 0))} to{' '}
+                    {litreFormat.format(Number(chart?.max_mm ?? 0))} mm
+                  </span>
+                  .
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setByMm(false)}
+                  className="mt-1 text-sm font-semibold text-brand-700 underline underline-offset-2"
+                >
+                  Enter litres instead
+                </button>
+              </div>
+              ) : (
               <div>
                 {/* The fuel is named in the label, not left to the card's
                     colour. Two four-digit readings typed into the wrong boxes
@@ -358,10 +456,21 @@ export default function StockCheckForm({
                   aria-describedby={`dip-help-${tank.id}`}
                 />
                 <p id={`dip-help-${tank.id}`} className="mt-1.5 text-sm text-ink-700">
-                  The dip rod reads a depth: convert it to litres on the tank chart first, then
-                  enter that figure here.
+                  {chart
+                    ? 'Litres read off a chart by hand. The tank chart can do it for you:'
+                    : 'The dip rod reads a depth: convert it to litres on the tank chart first, then enter that figure here.'}
                 </p>
+                {chart ? (
+                  <button
+                    type="button"
+                    onClick={() => setByMm(true)}
+                    className="mt-1 text-sm font-semibold text-brand-700 underline underline-offset-2"
+                  >
+                    Enter the rod reading in mm
+                  </button>
+                ) : null}
               </div>
+              )}
 
               {difference !== null ? (
                 <DipDifference difference={difference} isFirstDip={isFirstDip} forDate={closesDate} />

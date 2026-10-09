@@ -19,7 +19,7 @@ theme order; the last block of work is at the bottom.
 
 **The shape of it.** Next.js App Router (plain JavaScript) on Vercel in
 `sin1`, Supabase Postgres in `ap-southeast-1`. One owner, a couple of staff
-logins, one pump. Migrations run to **074**, and every page wears the new look
+logins, one pump. Migrations run to **075**, and every page wears the new look
 (September 2026).
 
 **What was added most recently**, newest last, all of it detailed further down:
@@ -72,6 +72,7 @@ logins, one pump. Migrations run to **074**, and every page wears the new look
 | Security         | **Stock value and cost of sales were readable without logging in**, through three functions the public key could call. Closed, with seven internal helpers staff could call. Migration 072. |
 | Customers        | **A customer can run a fleet** (073): vehicles under one account, the vehicle on each credit slip and oil sale, what each vehicle took on the customer's page, the vehicle on the statement, and search by any number. Built first for Al Hakeem. |
 | Salaries         | **Staff attendance and salaries** (074): a daily register, a dated daily rate per person, and month-end pay recorded as Salaries expenses in the month worked; a warning when the month already has salaries typed into Expenses by hand. Built first for Al Hakeem. |
+| Stock            | **Dips in mm, from the tank's chart** (075): the rod reading is typed, Postgres reads the litres off the tank's printed chart, and the form shows them before saving. Mubeen's two charts loaded, with two diesel typos corrected. |
 
 **If you are porting this to Electron or another shell**, read
 `README.md` → "If you are porting this off Supabase" first. The short version:
@@ -8140,7 +8141,67 @@ wrapped "Add expense" onto two lines.
 
 Brought here from Al Hakeem on 7 Oct 2026, unchanged.
 
-# Syncing the offline (Electron) build: reference `3d696ea` -> the end of migration 074
+## Dips in mm, from the tank's own chart (migration 075)
+
+The owner sent Mubeen's printed dip chart (an Excel file: petrol 2 to 2,580 mm
+in 259 lines, up to 24,027 L; diesel, "HSD", 2 to 2,780 mm in 279 lines, up to
+46,718 L) and asked for it in the app. Until now a dip was the LITRES: read
+the rod, look the depth up on paper, type the figure. Two steps for a mistake
+to creep into, and the rod reading itself was never kept.
+
+**What changed.** A tank with a chart asks for the rod reading in mm. A moment
+after typing stops, the form asks Postgres (`dip_to_litres`) and shows
+"From the tank chart = 11,559.3 L" under the box, with the gain or loss
+against the books as before. On save, a BEFORE trigger works the litres out
+again from the chart, so what was shown is what is stored, and a browser
+cannot send one figure and store another. "Enter litres instead" stays
+there for a reading off another chart; a tank with no chart is unchanged.
+The recorded dip shows "Rod reading 1,415 mm, from the chart" under the
+litres, and Settings says on each tank card whether it has a chart and its
+range.
+
+**Reading between lines.** The chart is printed every 8 or 10 mm. A reading
+between two lines takes the straight line between them (2 dp), as anyone
+reading the paper chart by hand would; below the first line, from 0 mm = 0
+L. Deeper than the last line is refused with the chart's end in the message,
+never extrapolated.
+
+**Two typos in the chart, corrected with the owner's agreement.** Diesel at
+660 mm read 8,812 L, between 8,431 (650) and 8,701 (670): a deeper dip
+reading as more than the next line. It is 8,612. At 2,730 mm, 46,610 L sat
+above 46,560 (2,740): it is 46,510. Each fits the steps on both sides. The
+database now refuses a chart whose litres do not rise with depth (a deferred
+constraint trigger, so a chart loads in any order and is checked at commit),
+which is how both were found.
+
+**Who can do what.** Charts: the owner writes (RLS), staff read. A staff login
+records dips in mm like the owner. `tank_dip_litres()` and the two trigger
+functions are closed to outside callers as 072 requires.
+
+**Loaded by a setup file, not the migration.** A chart belongs to one pump's
+tanks, so 075 creates the table empty and `supabase/setup/mubeen-dip-charts.sql`
+loads Mubeen's 538 lines. It stops unless there is exactly one 'Petrol Tank'
+and one 'Diesel Tank' with no chart yet. The other pumps get 075 with no
+chart, and nothing changes for them until theirs is loaded.
+
+**Rehearsed** (7 Oct 2026) on a local Postgres built from 001 to 074 with
+sample trading: all 26 existing tables hashed identical before and after (the
+new `dip_mm` column left out); the conversions checked against the chart by
+hand (650 mm 8,431 L; 655 mm 8,521.5 L; petrol 1,247 mm 11,559.30 L); a staff
+dip in mm sent with a false 999,999 L stored the chart's 20,384.40 L; a staff
+login cannot change a chart; a mistyped chart line is refused at commit; anon
+is refused; nothing missing from the backup; and a backup round trip restored
+all 538 lines identically. Rendered at 1366, 1024, 400, 360 and 320 px.
+
+**Applied to the live database on 7 Oct 2026** (project `cnvqisgzazyesihixwqu`),
+075 through the connector, then the setup file's chart load. Every one of the
+24 existing tables hashed identical before and after (2,100 rows, the new
+`dip_mm` column left out; no dip has one yet). Checked afterwards: 259 petrol
+and 279 diesel lines, 2 to 2,580 and 2 to 2,780 mm; diesel 655 mm 8,521.50 L,
+petrol 1,247 mm 11,559.30 L; RLS on; the table in the backup list;
+`dip_to_litres` open to logged-in users only and the conversion itself closed.
+
+# Syncing the offline (Electron) build: reference `3d696ea` -> the end of migration 075
 
 **Who this is for.** A session working in `Ammar-Sagheer/Offline-Petrol-Pump-Manager`
 (the desktop build: Electron, its own bundled Postgres, `pg` driver, `app_user`
@@ -8194,6 +8255,7 @@ those lines).
 | 071 `opening_balance_entry_type` | Fixes `create_customer_with_opening()`'s enum cast | **Skip.** The desktop build found and fixed this itself in its 023, before this repo did |
 | 073 `customer_vehicles` | `customer_vehicles`, a nullable `vehicle_id` on credit slips, oil sales and ledger entries, the vehicle trigger, per-vehicle totals, remove / restore | **Take, carefully.** It redefines `create_nozzle_reading()` and the two ledger-posting triggers whole: diff each against the desktop build's own copy first and carry only the `vehicle_id` lines if they differ. Its activity line patches `trg_write_activity()` by text, like 059. Drop the `backup_table_order()` part (the desktop build never took 051) and the 072-style revoke block, or revoke from `app_user` instead |
 | 074 `staff_salaries` | Staff, dated daily rates, attendance, salary payments into Expenses, a paid month closed | **Take.** New tables only. `auth.uid()` -> `current_uid()`, grants to `app_user`. It patches `reset_all_data()` and `trg_write_activity()` by text: check both bit. Drop the `backup_table_order()` part |
+| 075 `tank_dip_charts` | A tank's dip chart, `dip_mm` on a stock check, litres set from the chart by a BEFORE trigger, the form's preview | **Take.** New table and column only. Grants to `app_user`; drop the `backup_table_order()` part and the 072-style revoke block (or revoke from `app_user`). Load the desktop pump's own chart afterwards, if it has one |
 | 072 `close_internal_functions` | Revokes outside access to ten internal functions | **Supabase-specific; adapt or skip.** The leak was Supabase's `anon` role. The desktop build has no `anon` and no network exposure; if wanted, the equivalent is revoking the same ten from `app_user` (the app never calls them directly; every caller is SECURITY DEFINER). Low priority |
 
 ## 2. The app: the new look, new pages, new shared files
@@ -8256,6 +8318,7 @@ desktop build changed the old file:
 | **Vehicles per customer** (073) | `VehiclePicker.js`, `customers/VehiclesPanel.js`; changes to `ReadingForm`, `LubricantSaleForm`, `LooseOilSaleForm`, `CustomerLedgerTable`, `StatementPreview`, `CustomerView`, `CustomersView`, `customer-statement.js` (`withVehicleNumbers`), `statement-pdf.js`, the customer page and statement route | `getCustomers` (now with `vehicles`), `getCustomerVehicles`, `getCustomerVehicleTotals`, `getFleetNumbers`; `addCustomerVehicle`, `removeCustomerVehicle`, `restoreCustomerVehicle`; the credit-line and oil-sale actions pass `vehicle_id` |
 | **Staff and salaries** (074) | `app/admin/salaries/`, `salaries/SalariesView.js`, `AttendanceRegister.js`, `StaffControls.js`; sidebar entries; `Icon.js` (`staff`, `attendance`, `salary`); `/admin/salaries` in `helpers.js` | `getStaffMembers`, `getAttendanceForDay`, `getSalaryMonth`, `getHandTypedSalaries`; `markAttendance`, `addStaffMember`, `setStaffRate`, `removeStaffMember`, `restoreStaffMember`, `paySalary`, `cancelSalaryPayment`. The phone layout (Attendance / Salaries switch, `?tab=`, cards) is in the same view; `ConfirmAction` gains `triggerText` |
 | **Quick entry on the Dashboard** | `dashboard/QuickEntry.js`, `DashboardView.js`, `app/admin/page.js`; `BankTransactionForm.js` gains `bare` and `onSaved` | `getBankAccounts` and `getExpenseCategories` on the Dashboard; `createBankTransaction` also revalidates `/admin` |
+| **Dips in mm** (075) | `StockCheckForm.js` (`chart` prop, mm box, preview), `stock/StockView.js` and `TankForm.js` (`chart`), the Stock and Settings pages | `getDipChartRanges`; `previewDipLitres`; `createStockCheck` sends `dip_mm` |
 
 **Online-only, do not port:**
 
@@ -8289,3 +8352,21 @@ Applied on 6 Oct 2026 to project `mezfdpdvcchnlmylcruk`, from the SQL editor,
 afterwards: all five new tables and ten app functions present, the three
 `vehicle_id` columns in, nothing missing from the backup, the forecourt as it
 was (2 tanks, 6 nozzles). The database had no customers or readings yet.
+
+## Al Qaim: dips in mm, from his own tank charts (075, 9 Oct 2026)
+
+Brought from the master unchanged (migration 075 and the Stock, Settings and
+tank-card screens). He supplied the calibration charts of both tanks: the
+15,000 L petrol tank (a scan, typed in by hand: 258 lines, 0 to 2,570 mm, up
+to 15,328 L; every step rises smoothly, so no figure was misread) and the
+25,000 L diesel tank (222 lines, 0 to 2,210 mm, up to 23,750 L, where the
+printed chart stops). Four lines in the printed diesel chart were slips, out
+of step with the lines either side, and were corrected the way Mubeen's were:
+610 mm 6,696 to 4,696; 1,790 mm 19,226 to 19,267; 1,840 mm 19,885 to 19,855;
+2,020 mm 21,826 to 21,867. Loaded by `supabase/setup/al-qaim-dip-charts.sql`.
+
+Applied to his live database (mezfdpdvcchnlmylcruk) through the connector:
+every existing table hashed identical before and after; RLS on; the
+conversion closed to outside callers. His note for 1 Oct reads petrol 700 mm
+= 3,373 L and diesel 765 mm = 6,452.50 L.
+

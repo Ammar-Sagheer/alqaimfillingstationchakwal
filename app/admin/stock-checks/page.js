@@ -3,6 +3,7 @@ import {
   getExpectedStockForAllTanks,
   getStockChecks,
   getLubricantStock,
+  getDipChartRanges,
 } from '@/app/_lib/data-service';
 import { pageFrom } from '@/app/_components/ui/Pager';
 import StockView from '@/app/_components/admin/stock/StockView';
@@ -35,10 +36,11 @@ export default async function StockChecksPage({ searchParams }) {
       ? params.date
       : todayISO();
 
-  const [tanks, checks, lubricants] = await Promise.all([
+  const [tanks, checks, lubricants, chartRanges] = await Promise.all([
     getExpectedStockForAllTanks(date),
     getStockChecks(),
     getLubricantStock(date),
+    getDipChartRanges(),
   ]);
 
   return (
@@ -48,6 +50,7 @@ export default async function StockChecksPage({ searchParams }) {
       tanks={tanks}
       checks={checks}
       lubricants={lubricants}
+      chartRanges={chartRanges}
       canManage={profile?.role === ROLES.SUPER_ADMIN}
     />
   );

@@ -26,7 +26,15 @@ const PER_PAGE = 25;
  * Three zones, as before: the two tanks' dips, the lubricant shelf, and the
  * dips already taken. What each one says is unchanged; how it looks moved over.
  */
-export default function StockView({ date, page, tanks, checks, lubricants, canManage }) {
+export default function StockView({
+  date,
+  page,
+  tanks,
+  checks,
+  lubricants,
+  chartRanges = {},
+  canManage,
+}) {
   const checksOnDate = new Map(
     checks.filter((check) => check.check_date === date).map((check) => [check.tank_id, check]),
   );
@@ -82,6 +90,7 @@ export default function StockView({ date, page, tanks, checks, lubricants, canMa
               existingCheck={checksOnDate.get(tank.id) ?? null}
               earliestBooksDate={earliestByTank.get(tank.id) ?? null}
               openingStock={tank.opening_stock_litres}
+              chart={chartRanges[tank.id] ?? null}
               canManage={canManage}
             />
           ))}

@@ -410,6 +410,14 @@ amount of application code can get around them.
   that would reprice one of its days, until the payment is cancelled (which
   also removes its expense). Pay is worked out here, never in the browser.
 
+- **A dip in mm is turned into litres by the tank's chart, here** (075). A
+  tank may carry its printed dip chart (`tank_dip_charts`); a dip saved with a
+  rod reading (`dip_mm`) has its litres set from that chart on the way in, so
+  the browser cannot send one figure and store another. Between two printed
+  lines, the straight line between them; deeper than the chart's last line,
+  refused. A chart whose litres do not rise with the depth is refused at
+  commit. A tank with no chart takes its dip in litres, as before.
+
 If the app and the database ever disagree, the database is right.
 
 ---
@@ -977,6 +985,7 @@ Applied in order:
 | `072_close_internal_functions.sql` | **Internal functions closed to outside callers.** `cost_of_goods_sold`, `stock_value_at` and `lubricant_stock_value` answered the public (anon) key; seven helpers answered any staff login. 049's `revoke ... from public` missed Supabase's own grants to `anon`/`authenticated`. Every caller is a definer function, so nothing in the app changes. No row touched |
 | `073_customer_vehicles.sql` | **One account, many vehicles** (built first for Al Hakeem as its 801). `customer_vehicles` (a number is active on one account at a time, matched without case, spaces or dashes by `vehicle_key()`), and a nullable `vehicle_id` on credit slips, oil sales and the ledger entries they post. A trigger refuses a vehicle that is not on the slip's account or has been removed. `get_customer_vehicle_totals()` sums what each vehicle took, in Postgres. `remove_customer_vehicle()` deletes an unused vehicle and retires a used one; `restore_customer_vehicle()` brings it back. Each customer's old vehicle box joins the list (backfilled). One credit limit and one balance per account, no drivers. In the backup and the activity log; internal functions closed as 072 requires. No existing row changes (rehearsed: every table hashed before and after) |
 | `074_staff_salaries.sql` | **Staff attendance and salaries** (built first for Al Hakeem as its 802). The people the pump pays by the day (not logins): `staff_members`, a dated daily rate in `staff_rates` (a raise is a new row from a date), a register in `staff_attendance` (present, half day, absent; no future days), and `salary_payments`. `pay_salary()` sums the month in Postgres in whole rupees and writes one Salaries expense dated in the month worked, with the payment row; deleting that expense, or `cancel_salary_payment()`, undoes it. A paid month is closed: its attendance cannot change and no rate can reprice it. Rates and pay are the owner's under RLS; staff mark attendance. In the backup, the reset and the activity log |
+| `075_tank_dip_charts.sql` | **Dips in mm, from the tank's chart.** `tank_dip_charts` (one row per printed line: `dip_mm`, `litres`; owner writes, staff read), `tank_dip_litres()` (exact line, else straight-line between the two around it, from 0 mm = 0 L below the first; refused beyond the last), `dip_to_litres()` for the form's preview, `get_dip_chart_ranges()`, and a nullable `stock_checks.dip_mm` whose BEFORE trigger sets `actual_dip_reading` from the chart. Litres must rise with depth (deferred check). In the backup after `tanks`; internal functions closed as 072 requires. No existing row changes. A pump's own chart is loaded by a setup file (`supabase/setup/al-qaim-dip-charts.sql` here) |
 
 All reporting is done as Postgres aggregate RPCs rather than in the browser, so
 the numbers are fast and cannot be altered client-side.

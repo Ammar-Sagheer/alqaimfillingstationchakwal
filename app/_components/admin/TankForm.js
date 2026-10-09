@@ -35,7 +35,7 @@ const litres = (value) => `${litreFormat.format(value)} L`;
  * the starting baseline) - the two never contradict each other because they
  * are not answering the same question.
  */
-export default function TankForm({ tank, lastDip }) {
+export default function TankForm({ tank, lastDip, chart = null }) {
   const [isOpen, setIsOpen] = useState(false);
   const [notice, setNotice] = useState(null);
 
@@ -179,6 +179,20 @@ export default function TankForm({ tank, lastDip }) {
           >
             {lastDip ? 'View stock checks' : 'Record the first one'}
           </PendingLink>
+          {/* Whether a dip here is typed in mm (075) or in litres. */}
+          <p className="basis-full text-sm">
+            {chart ? (
+              <span className="tabular">
+                Dip chart: {litreFormat.format(Number(chart.min_mm))} to{' '}
+                <span className="whitespace-nowrap">
+                  {litreFormat.format(Number(chart.max_mm))} mm
+                </span>{' '}
+                ({litreFormat.format(Number(chart.lines))} lines), so dips are entered in mm.
+              </span>
+            ) : (
+              'No dip chart loaded, so dips are entered in litres.'
+            )}
+          </p>
         </div>
       </article>
 

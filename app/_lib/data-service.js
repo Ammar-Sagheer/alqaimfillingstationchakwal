@@ -1150,3 +1150,15 @@ export async function getHandTypedSalaries(from, to) {
     (row) => !paidHere.has(row.id) && Number(row.amount) > 0,
   );
 }
+
+/**
+ * Which tanks have a dip chart (075), as { tank_id: { min_mm, max_mm, lines } }.
+ * A tank with one is dipped in millimetres on the Stock page. Never takes the
+ * page down: no charts means every tank is dipped in litres, as before 075.
+ */
+export async function getDipChartRanges() {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('get_dip_chart_ranges');
+  if (error) return {};
+  return Object.fromEntries((data ?? []).map((row) => [row.tank_id, row]));
+}

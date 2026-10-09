@@ -12,6 +12,7 @@ import {
   getRecentFuelPrices,
   getCurrentRates,
   getLastStockCheck,
+  getDipChartRanges,
 } from '@/app/_lib/data-service';
 import { withoutDashes } from '@/app/_lib/format-helpers';
 import SettingsView from '@/app/_components/admin/settings/SettingsView';
@@ -41,11 +42,12 @@ export default async function SettingsPage({ searchParams }) {
       ? withoutDashes(params.backup_error.slice(0, 300))
       : null;
 
-  const [tanks, nozzles, prices, rates] = await Promise.all([
+  const [tanks, nozzles, prices, rates, chartRanges] = await Promise.all([
     getTanks(),
     getNozzles(),
     getRecentFuelPrices(RECENT_ROWS),
     getCurrentRates(),
+    getDipChartRanges(),
   ]);
 
   // One tank per call - see getLastStockCheck for why this is not a single
@@ -68,6 +70,7 @@ export default async function SettingsPage({ searchParams }) {
       prices={prices}
       rates={rates}
       lastDips={lastDips}
+      chartRanges={chartRanges}
       backupError={backupError}
       showBackup={backupAllowed()}
       showReset={fullResetAllowed()}

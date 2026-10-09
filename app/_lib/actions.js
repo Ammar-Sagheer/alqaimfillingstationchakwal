@@ -1075,6 +1075,26 @@ export async function deleteLubricantSale(_prevState, formData) {
 // Stock checks (the physical dip)
 // ---------------------------------------------------------------------------
 
+/**
+ * The litres a rod reading comes to on a tank's dip chart (075), for the Stock
+ * form to show before saving. Worked out by the database, never here.
+ */
+export async function previewDipLitres(tankId, mm) {
+  try {
+    await requireRole(ROLES.SUPER_ADMIN, ROLES.DATA_ENTRY);
+  } catch (error) {
+    return fail(error.message);
+  }
+  const value = Number(mm);
+  if (!tankId || !Number.isFinite(value) || value < 0) return fail('Enter the rod reading in mm.');
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('dip_to_litres', { p_tank_id: tankId, p_mm: value });
+  if (error) return fail(describe(error, 'Could not read the dip chart.'));
+  if (data === null) return fail('This tank has no dip chart.');
+  return { ok: true, litres: Number(data) };
+}
+
 export async function createStockCheck(_prevState, formData) {
   let profile;
   try {
@@ -1086,12 +1106,19 @@ export async function createStockCheck(_prevState, formData) {
   const tankId = text(formData, 'tank_id');
   const checkDate = text(formData, 'check_date');
   const taken = text(formData, 'taken') === 'evening' ? 'evening' : 'morning';
-  const actualDip = number(formData, 'actual_dip_reading');
+  let actualDip = number(formData, 'actual_dip_reading');
+  // The rod reading in mm, on a tank with a dip chart (075). The litres are
+  // then the chart's, from the database; the database sets them again on the
+  // way in, so this figure is only for the message below.
+  const dipMm = number(formData, 'dip_mm');
   const note = text(formData, 'note');
 
   if (!tankId) return fail('Choose a tank.');
   if (!checkDate) return fail('Enter the date of the dip.');
-  if (actualDip === null || actualDip < 0) return fail('Enter the measured dip reading.');
+  if (dipMm !== null && dipMm < 0) return fail('Enter the rod reading in mm, 0 or more.');
+  if (dipMm === null && (actualDip === null || actualDip < 0)) {
+    return fail('Enter the measured dip reading.');
+  }
 
   /*
    * A dip is a moment, not a day. The pump dips first thing in the morning,
@@ -1103,6 +1130,16 @@ export async function createStockCheck(_prevState, formData) {
   const closesDate = taken === 'morning' ? shiftISODate(checkDate, -1) : checkDate;
 
   const supabase = await createClient();
+
+  if (dipMm !== null) {
+    const { data: litres, error: chartError } = await supabase.rpc('dip_to_litres', {
+      p_tank_id: tankId,
+      p_mm: dipMm,
+    });
+    if (chartError) return fail(describe(chartError, 'Could not read the dip chart.'));
+    if (litres === null) return fail('This tank has no dip chart. Enter the litres instead.');
+    actualDip = Number(litres);
+  }
 
   // Expected stock is worked out by the database, never sent from the browser -
   // otherwise the gain/loss figure could be made to say anything. The database
@@ -1123,6 +1160,7 @@ export async function createStockCheck(_prevState, formData) {
     taken,
     expected_stock: expected ?? 0,
     actual_dip_reading: actualDip,
+    ...(dipMm !== null ? { dip_mm: dipMm } : {}),
     note: note || null,
     created_by: profile.id,
   });
