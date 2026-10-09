@@ -28,15 +28,25 @@ export async function generateMetadata({ params }) {
 export default async function SupplierPage({ params, searchParams }) {
   await requirePageRole(ROLES.SUPER_ADMIN);
   const { id } = await params;
-  const page = pageFrom(await searchParams);
+  const query = await searchParams;
+  const showCancelled = query?.cancelled === '1';
+  const askedPage = query?.page ? pageFrom(query) : null;
+  const ledgerFor = (page) =>
+    getSupplierLedgerPage(id, { page, perPage: PER_PAGE, showCancelled, oldestFirst: true });
 
-  const [suppliers, { rows: entries, total: entryCount, correctedIds }, bankAccounts, treasury] =
-    await Promise.all([
-      getSupplierSummaries(),
-      getSupplierLedgerPage(id, { page, perPage: PER_PAGE }),
-      getBankAccounts(),
-      getTreasuryOverview(7).catch(() => null),
-    ]);
+  const [suppliers, firstLedger, bankAccounts, treasury] = await Promise.all([
+    getSupplierSummaries(),
+    ledgerFor(askedPage ?? 1),
+    getBankAccounts(),
+    getTreasuryOverview(7).catch(() => null),
+  ]);
+
+  // Oldest first, like his khata, so the latest lines are on the LAST page:
+  // with no page asked for, open there.
+  const lastPage = Math.max(1, Math.ceil(firstLedger.total / PER_PAGE));
+  const page = askedPage ?? lastPage;
+  const ledger = page === (askedPage ?? 1) ? firstLedger : await ledgerFor(page);
+  const { rows: entries, total: entryCount, correctedIds, cancelledPairs } = ledger;
 
   const supplier = suppliers.find((row) => row.id === id);
   if (!supplier) notFound();
@@ -48,6 +58,8 @@ export default async function SupplierPage({ params, searchParams }) {
       entryCount={entryCount}
       correctedIds={correctedIds}
       page={page}
+      showCancelled={showCancelled}
+      cancelledPairs={cancelledPairs}
       bankAccounts={bankAccounts ?? []}
       safeBalance={treasury ? Number(treasury.balance ?? 0) : null}
     />

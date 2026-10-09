@@ -8381,3 +8381,27 @@ the first sale" is still there. The sentence under the choice and the Stock
 section's own line follow it. Al Hakeem did the same on 6 Oct, worded for a
 night closing; the master keeps Morning.
 
+## Al Qaim: the supplier account reads like his khata (077, 9 Oct 2026)
+
+He asked (voice note, 9 Oct) for Jinn's account as one running balance sheet,
+the way he keeps it on paper: the opening balance he owed on 30 Sep at the
+top, each online payment taken off, each delivery added at its rate, and the
+balance after every line, down one page. The page was already a running
+balance, but newest first, 25 lines a page, and it showed every cancelled
+entry with its "Cancelled" line: correcting the 9 Oct load (payments recorded
+from a UBL account that was really the safe) had left 8 such pairs, so 12
+real lines read as 28 over two pages.
+
+`get_supplier_ledger_page()` gains `p_oldest_first` and `p_show_cancelled`,
+both off by default, so an older caller gets what it got before. Hidden, a
+cancelled entry and the line cancelling it leave the page together (they net
+to nothing), and the running balance is summed in Postgres over the lines
+shown, so each still reads true. Nothing is removed; the ledger stays
+append-only, and "Show them" puts the pairs back. The page now reads oldest
+first, 100 lines a page (a month fits), and opens on the last page.
+
+Checked on a local copy of his books: 12 lines from Rs 3,849,076 down to
+Rs 2,735,076, the same figure as his Jinn sheet; the three-argument call still
+answers as before. Rendered at 1366 and 400 px. Should go to the master
+(petrol-pump-master) as its next migration.
+

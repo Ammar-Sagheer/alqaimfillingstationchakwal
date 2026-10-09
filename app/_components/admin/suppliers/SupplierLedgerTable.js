@@ -4,7 +4,7 @@ import { formatDate } from '@/app/_lib/date-helpers';
 import { formatLitres, formatPKR, formatRate } from '@/app/_lib/format-helpers';
 
 /**
- * One page of a supplier's account, newest first, laid out the way the owner
+ * One page of a supplier's account, oldest first (077), laid out the way the owner
  * described his register: the invoice, the litres, the rate per litre, what was
  * paid, and the balance after it.
  *

@@ -920,17 +920,24 @@ export async function getSupplierSummaries() {
 }
 
 /**
- * One page of one supplier's account, newest first, each row carrying what was
- * owed after it - summed over the WHOLE account in Postgres, the way 064 does it
- * for customers, so a row reads the same on whichever page it falls.
+ * One page of one supplier's account, each row carrying what was owed after
+ * it - summed in Postgres, the way 064 does it for customers. Oldest first by
+ * default here, read down the page like the owner's khata, with cancelled
+ * pairs (a cancelled entry and its "Cancelled" line, which net to nothing)
+ * left out unless asked for (077).
  */
-export async function getSupplierLedgerPage(supplierId, { page = 1, perPage = 25 } = {}) {
+export async function getSupplierLedgerPage(
+  supplierId,
+  { page = 1, perPage = 25, showCancelled = false, oldestFirst = true } = {},
+) {
   const supabase = await createClient();
   const result = unwrap(
     await supabase.rpc('get_supplier_ledger_page', {
       p_supplier_id: supplierId,
       p_limit: perPage,
       p_offset: (page - 1) * perPage,
+      p_show_cancelled: showCancelled,
+      p_oldest_first: oldestFirst,
     }),
     'the supplier account',
   );
@@ -938,6 +945,7 @@ export async function getSupplierLedgerPage(supplierId, { page = 1, perPage = 25
     rows: result?.rows ?? [],
     total: Number(result?.total ?? 0),
     correctedIds: result?.corrected_ids ?? [],
+    cancelledPairs: Number(result?.cancelled_pairs ?? 0),
   };
 }
 

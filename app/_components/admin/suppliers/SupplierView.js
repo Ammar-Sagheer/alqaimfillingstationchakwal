@@ -1,4 +1,5 @@
 import Icon from '@/app/_components/ui/Icon';
+import PendingLink from '@/app/_components/ui/PendingLink';
 import Pager from '@/app/_components/ui/Pager';
 import TitleHeader from '@/app/_components/admin/dashboard/TitleHeader';
 import SectionHeader from '@/app/_components/admin/dashboard/SectionHeader';
@@ -12,7 +13,8 @@ import { SupplierActiveButton } from '@/app/_components/admin/suppliers/Supplier
 
 import { formatPKR } from '@/app/_lib/format-helpers';
 
-export const PER_PAGE = 25;
+// A month of deliveries and daily payments fits on one page (077).
+export const PER_PAGE = 100;
 
 /**
  * One supplier's account: what the pump owes them, and every entry behind it.
@@ -27,6 +29,8 @@ export default function SupplierView({
   entryCount,
   correctedIds,
   page,
+  showCancelled = false,
+  cancelledPairs = 0,
   bankAccounts,
   safeBalance,
 }) {
@@ -92,7 +96,7 @@ export default function SupplierView({
           icon="list"
           tone="neutral"
           title="The account"
-          description="Purchases add to what the pump owes; payments, discounts and credits take it off. Balance is Payable when the pump owes the supplier, Advance when it has paid ahead. Deliveries arrive here by themselves from the Purchases page, and a mistake is cancelled with a new entry, never edited."
+          description="Read down the page, like your khata: the opening balance at the top, each delivery added at its rate, each payment taken off, and what is owed after every line. Deliveries arrive here by themselves from the Purchases page; a mistake is cancelled with a new entry, never edited."
         />
 
         <SupplierLedgerTable
@@ -102,11 +106,30 @@ export default function SupplierView({
           canCancel
         />
 
+        {/* A cancelled entry and its "Cancelled" line net to nothing, so the
+            page leaves both out unless asked; the balance on every line shown
+            is summed in Postgres over the lines shown (077). */}
+        {cancelledPairs > 0 ? (
+          <p className="mt-3 text-sm text-ink-700">
+            {showCancelled
+              ? `Showing ${cancelledPairs} cancelled ${cancelledPairs === 1 ? 'entry' : 'entries'} and the lines that cancel them. `
+              : `${cancelledPairs} cancelled ${cancelledPairs === 1 ? 'entry is' : 'entries are'} hidden, with the lines that cancel them: together they change nothing. `}
+            <PendingLink
+              href={`/admin/suppliers/${supplier.id}${showCancelled ? '' : '?cancelled=1'}`}
+              className="font-semibold text-brand-700 underline-offset-2 hover:underline"
+            >
+              {showCancelled ? 'Hide them' : 'Show them'}
+            </PendingLink>
+          </p>
+        ) : null}
+
         <Pager
           page={page}
           perPage={PER_PAGE}
           total={entryCount}
-          hrefFor={(n) => `/admin/suppliers/${supplier.id}?page=${n}`}
+          hrefFor={(n) =>
+            `/admin/suppliers/${supplier.id}?page=${n}${showCancelled ? '&cancelled=1' : ''}`
+          }
           label="Account pages"
         />
       </section>
