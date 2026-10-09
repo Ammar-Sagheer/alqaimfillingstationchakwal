@@ -17,6 +17,10 @@
 >   9 Oct 2026; four slips in the printed diesel chart corrected (see the file).
 > - `supabase/setup/remove-placeholder-suppliers.sql`: 067's four placeholder
 >   suppliers deleted from his database (4 Oct 2026); he adds his real ones.
+> - The dip form defaults to **"At closing, after the last sale"** (`taken =
+>   'evening'`, `StockCheckForm.js` `DEFAULT_TIMING`): he closes at 7 am and dips
+>   at the closing, so the rod measures the day his sheet is dated. The master
+>   defaults to Morning.
 > - The backup panel shows only when the Vercel env var `SHOW_BACKUP=true`.
 > - Deployed on Vercel as `alqaim-filling-station` (team "ammar's projects"),
 >   https://alqaim-filling-station.vercel.app, from `main`; Supabase project

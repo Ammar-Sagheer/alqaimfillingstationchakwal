@@ -73,7 +73,7 @@ export default function StockView({
           icon="stock"
           tone="held"
           title="Tanks: dip against the books"
-          description="A morning dip measures what was left at the close of the day before, so that is the day it is checked against."
+          description="A dip at the closing, after the last sale, is checked against that day's books. One taken before the first sale is checked against the day before."
         />
         {/* ONE HEIGHT FOR THE PAIR. This was `items-start`: a tank with its
             dip recorded is shorter than one still showing the form, and the

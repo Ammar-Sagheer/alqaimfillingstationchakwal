@@ -52,22 +52,27 @@ const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
  * figure that still had the 10th's fuel in it and reported a whole day's sales
  * as a loss, every single day.
  *
- * Morning is the default because it is the pump's routine. Both options are
+ * EVENING ("at closing") is the default in this copy (Al Qaim, 9 Oct 2026): he
+ * closes at 7 am and dips at the closing, after the day's last sale, so the rod
+ * measures the day his sheet is dated. The master defaults to morning, its own
+ * pump's routine. Both options are
  * legal and only the person holding the rod knows which is right, so this
  * follows the rule in docs/UI_CONVENTIONS.md for exactly that shape of control:
  * name the choice in plain words, then SHOW THE CONSEQUENCE - the day it closes
  * and the book figure that produces - before it is committed.
  */
+const DEFAULT_TIMING = 'evening';
+
 const TIMINGS = [
   {
-    value: 'morning',
-    title: 'Morning, before the pumps opened',
-    detail: 'The usual one. It closes yesterday, whose readings you are entering now.',
+    value: 'evening',
+    title: 'At closing, after the last sale',
+    detail: 'The usual one. It closes this date, whose readings you are entering now.',
   },
   {
-    value: 'evening',
-    title: 'Evening, after the pumps closed',
-    detail: 'Only if the rod went in at the end of the day, after the last sale.',
+    value: 'morning',
+    title: 'Before the first sale',
+    detail: 'Only if the rod went in before trading began. It closes the day before.',
   },
 ];
 
@@ -94,7 +99,7 @@ export default function StockCheckForm({
   const [byMm, setByMm] = useState(Boolean(chart));
   const [mm, setMm] = useState('');
   const [chartLitres, setChartLitres] = useState({ litres: null, error: null, pending: false });
-  const [taken, setTaken] = useState('morning');
+  const [taken, setTaken] = useState(DEFAULT_TIMING);
   const [notice, setNotice] = useState(null);
   const formRef = useRef(null);
 
@@ -124,7 +129,7 @@ export default function StockCheckForm({
       setMm('');
       setChartLitres({ litres: null, error: null, pending: false });
       setByMm(Boolean(chart));
-      setTaken('morning');
+      setTaken(DEFAULT_TIMING);
     }
     // `chart` only decides the box to go back to.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -136,7 +141,7 @@ export default function StockCheckForm({
     setDip('');
     setMm('');
     setChartLitres({ litres: null, error: null, pending: false });
-    setTaken('morning');
+    setTaken(DEFAULT_TIMING);
   }, [date]);
 
   // Ask the database what the rod reading comes to, a moment after typing stops.
@@ -377,9 +382,9 @@ export default function StockCheckForm({
                   activeClass={color.selected}
                 />
                 <p className="mt-1.5 text-sm text-ink-700">
-                  A dip taken on the morning of {formatDate(date)} measures what was left at the
-                  end of {formatDate(shiftISODate(date, -1))}, so that is the day it is checked
-                  against.
+                  {taken === 'evening'
+                    ? `A dip taken at the closing for ${formatDate(date)}, after the last sale, measures what was left at the end of that day, so ${formatDate(date)} is the day it is checked against.`
+                    : `A dip taken before the first sale on ${formatDate(date)} measures what was left at the end of ${formatDate(shiftISODate(date, -1))}, so that is the day it is checked against.`}
                 </p>
               </div>
 

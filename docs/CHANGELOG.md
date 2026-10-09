@@ -8370,3 +8370,14 @@ every existing table hashed identical before and after; RLS on; the
 conversion closed to outside callers. His note for 1 Oct reads petrol 700 mm
 = 3,373 L and diesel 765 mm = 6,452.50 L.
 
+## Al Qaim: the dip form opens on "At closing" (9 Oct 2026)
+
+He closes at 7 am and dips at the closing, after the day's last sale, so the
+rod measures the day his sheet is dated: the app's "evening" dip. The form
+opened on Morning, which would check every dip against the day before unless
+he changed it each time. It now opens on "At closing, after the last sale"
+(listed first, as the usual one) and goes back to it after each save; "Before
+the first sale" is still there. The sentence under the choice and the Stock
+section's own line follow it. Al Hakeem did the same on 6 Oct, worded for a
+night closing; the master keeps Morning.
+
